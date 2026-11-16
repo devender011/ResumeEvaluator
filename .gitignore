@@ -1,0 +1,24 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+backend/.venv/
+frontend/node_modules/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Local resume files can contain personal information
+*.pdf

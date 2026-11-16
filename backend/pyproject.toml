@@ -1,0 +1,26 @@
+[project]
+name = "day5"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "devender011", email = "dipurajput011@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "groq>=1.7.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "python-multipart>=0.0.20",
+    "redis>=5.2.0",
+    "pydantic>=2.14.3",
+    "pymupdf>=2.1",
+    "python-dotenv>=1.2.4",
+]
+
+[project.scripts]
+day5 = "day5:main"
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14.0"]
+build-backend = "uv_build"
