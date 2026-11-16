@@ -1,72 +1,45 @@
 # Resume Lens
 
-Resume Lens is a small FastAPI + React app for reviewing resumes. It accepts PDF and UTF-8 `.txt` files, requires evaluation criteria, shows a document preview and extracted text, then returns a score and written evaluation using Groq.
+Resume Lens is an AI-assisted resume review app. A user provides criteria for a role, uploads a resume, and receives an overall fit score with written feedback. The review is based on the resume content and the criteria entered for that review.
 
-## Run the backend
+## What it does
 
-From the repository root, prepare the backend environment and add your Groq API key and Redis connection URL to `backend/.env`:
+- Accepts PDF and plain-text (`.txt`) resumes.
+- Previews the selected document and displays extracted resume text.
+- Collects a role, required skills, and experience scope. A scoring rubric can optionally be added.
+- Keeps the criteria in the browser's session storage so they remain available during the current tab session, including after a refresh.
+- Returns an AI-generated score out of 100 and an evaluation describing strengths, gaps, and next steps.
 
-```powershell
-Set-Location backend
-Copy-Item .env.example .env
-uv sync
-uv run uvicorn index:app --reload
-```
+## Review flow
 
-Set `REDIS_URL` in `.env` before analyzing resumes. For local development, use a local Redis URL; for Upstash, use the TLS TCP connection URL from the database's Connect page. Without Redis, the API can start in development but `/api/analyze` returns `503`.
+1. Enter role criteria and select or drop a resume into the upload area.
+2. Review the PDF preview or text file content.
+3. Submit the resume for text extraction and analysis.
+4. Read the score and evaluation alongside the extracted text.
 
-The API listens at `http://localhost:8000`; interactive API docs are at `http://localhost:8000/docs`.
+The interface is built with React and Vite. The API is built with FastAPI and extracts selectable text from PDFs with PyMuPDF. It sends the extracted resume text and user criteria to Groq for analysis. Redis provides a shared rate limit of 20 analysis attempts per source IP in a rolling 24-hour window.
 
-## Run the frontend
+## Input and service limits
 
-In another terminal, from the repository root:
+- Accepted formats: PDF and UTF-8 plain text.
+- Maximum file size: 2 MB.
+- Maximum PDF length: 10 pages.
+- Maximum extracted resume text: 50,000 characters.
+- Role, skills, and experience criteria are required; scoring guidance is optional.
+- Custom criteria are limited to 5,000 characters.
 
-```powershell
-Set-Location frontend
-Copy-Item .env.example .env
-npm install
-npm run dev
-```
+Scanned image-only PDFs do not contain selectable text and are not analyzed; OCR is not currently included.
 
-Open the Vite URL shown in the terminal (usually `http://localhost:5173`). Set `VITE_API_URL` in `frontend/.env` if the backend runs at a different address.
+## Data handling
 
-## Production checklist
+Uploaded files and extracted resume text are not persisted by the app. Resume text and evaluation criteria are sent to Groq to generate the analysis. Criteria are stored in the browser's session storage for the current tab session. Redis stores hashed IP-based rate-limit keys and their request timestamps; it does not store resume content.
 
-Configure these values in the API host's secret/environment settings:
+Resume Lens provides an AI-generated assessment, which may be incomplete or inaccurate. It is intended to support review, not replace human judgment in hiring decisions.
 
-- `APP_ENV=production` disables the interactive API docs and requires production CORS and host allowlists.
-- `GROQ_API_KEY` stays on the backend. Never add it to a `VITE_` variable.
-- `REDIS_URL` is the private Redis connection URL. Production startup fails if it is missing or Redis cannot be reached.
-- `CORS_ORIGINS` is the comma-separated list of exact HTTPS frontend origins.
-- `ALLOWED_HOSTS` is the comma-separated list of API hostnames.
-- `MAX_CONCURRENT_ANALYSES` caps simultaneous Groq calls per API process; the default is 2.
-- `VITE_API_URL` is the API's HTTPS URL and must be set when building the frontend.
+## Technology
 
-The API rejects uploads over 2 MB, PDFs over 10 pages, and extracted text over 50,000 characters. Redis allows at most 20 LLM attempts per source IP in a rolling 24-hour window, shared across API workers and restarts. It stores hashed IP keys that expire automatically; it does not store resumes. The Vercel backend reads its platform generated client IP header; local development uses the direct connection address. The hosting proxy must also reject request bodies above the upload limit plus multipart overhead, because it parses the upload before the application endpoint runs. Configure authentication before making `/api/analyze` public.
-
-Resume text is sent to Groq for inference. The app does not persist uploaded files or extracted text. Review Groq's data handling and publish a privacy notice that fits your users and use case.
-
-## Deploy to Vercel
-
-This repository is configured as two Vercel projects using the same Git repository. In the API project's settings, enable Vercel's automatically exposed system environment variables so the API can identify trusted platform client IP headers for Redis rate limiting:
-
-1. Create the frontend project with the project root set to `frontend`. Vercel uses the included `frontend/vercel.json` to install with `npm ci`, run the Vite build, and publish `dist`.
-2. Create the API project with the project root set to `backend`. Vercel detects the FastAPI application exported as `app` from `index.py`, installs dependencies from `pyproject.toml` and `uv.lock`, and applies the 60-second function duration in `backend/vercel.json`.
-3. Deploy the API once, then set `VITE_API_URL` on the frontend project to the API's HTTPS origin (for example, `https://your-api.vercel.app`) for Production and Preview as needed. Redeploy the frontend after setting it; Vite embeds this public URL at build time.
-4. Set the API project's environment variables for Production:
-
-   - `APP_ENV=production`
-   - `GROQ_API_KEY` — secret from Groq
-   - `GROQ_MODEL=qwen/qwen3.8-27b` — optional; this is the current default
-   - `REDIS_URL` — TLS TCP URL from your Redis provider, such as Upstash
-   - `CORS_ORIGINS=https://your-frontend.vercel.app` — exact frontend origin, without a trailing slash
-   - `ALLOWED_HOSTS=your-api.vercel.app` — API hostname only, without `https://`
-   - `MAX_CONCURRENT_ANALYSES=2` — optional
-
-   Redeploy the API after adding these settings. Add your custom domain to the corresponding CORS and host settings if you use one. Preview frontend domains also need to be listed in `CORS_ORIGINS` to call the API.
-
-The 2 MB application upload cap fits under Vercel Functions' 4.5 MB request body limit, including multipart overhead. The API needs Redis because the 20 calls per IP limit is shared through Redis. Groq and Redis have their own plans and usage limits. Vercel Hobby is free for personal, non-commercial projects; commercial use requires a suitable paid plan. See [Vercel FastAPI deployment](https://vercel.com/docs/frameworks/backend/fastapi), [function limits](https://vercel.com/docs/functions/limitations), and [Hobby plan terms](https://vercel.com/docs/plans/hobby).
-
-Keep `backend/uv.lock` and `frontend/package-lock.json` committed for reproducible installs. Do not commit `.env` files or uploaded resumes.
-
-PDFs must contain selectable text; scanned image-only PDFs need OCR before they can be analyzed.
+- **Frontend:** React, Vite
+- **API:** FastAPI, Python
+- **PDF text extraction:** PyMuPDF
+- **AI analysis:** Groq
+- **Rate limiting:** Redis
